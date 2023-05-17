@@ -7,12 +7,16 @@ use {
     anchor_spl::{
         associated_token,
         token,
+    
     },
     mpl_token_metadata::{
         ID as TOKEN_METADATA_ID,
         instruction as token_instruction,
     },
 };
+use anchor_spl::token::TokenAccount;
+use anchor_spl::token::Mint;
+use anchor_spl::token::Token;
 
 
 
@@ -31,6 +35,9 @@ pub mod mint_stake {
        metadata_uri: String,
        collection_mint: Pubkey,
     ) -> Result<()> {
+
+        let pubkey = &*ctx.accounts.authority.key.to_string();
+        msg!("pubkey: {}", pubkey);
 
         msg!("Creating mint account...");
         msg!("Mint: {}", &ctx.accounts.mint.key());
@@ -155,6 +162,10 @@ pub mod mint_stake {
 
     }
 
+
+
+
+
     pub fn init_pool(ctx: Context<InitPoolCtx>, ix:InitPoolIx) -> Result<()> {
         let stake_pool = &mut ctx.accounts.stake_pool;
         let identifier = &mut ctx.accounts.identifier;
@@ -175,29 +186,12 @@ pub mod mint_stake {
         let identifier = &mut ctx.accounts.identifier;
         identifier.count += 1;
         Ok(())
-
     }
 
     pub fn stake(ctx: Context<StakeCtx>, amount: u64) -> Result<()> {
         let stake_pool = &mut ctx.accounts.stake_pool;
         let stake_entry = &mut ctx.accounts.stake_entry;
-    
-        if stake_pool.end_date.is_some() && Clock::get().unwrap().unix_timestamp > stake_pool.end_date.unwrap() {
-            return Err(error!(ErrorCode::StakePoolHasEnded));
-        }
-    
-        if stake_entry.amount != 0 {
-            stake_entry.total_stake_seconds = stake_entry.total_stake_seconds.saturating_add(
-                (u128::try_from(stake_entry.cooldown_start_seconds.unwrap_or(Clock::get().unwrap().unix_timestamp))
-                    .unwrap()
-                    .saturating_sub(u128::try_from(stake_entry.last_updated_at.unwrap_or(stake_entry.last_staked_at)).unwrap()))
-                .checked_mul(u128::try_from(stake_entry.amount).unwrap())
-                .unwrap(),
-            );
-            stake_entry.cooldown_start_seconds = None;
-        }
-    
-        // transfer original
+        // transfer
         let cpi_accounts = token::Transfer {
             from: ctx.accounts.user_original_mint_token_account.to_account_info(),
             to: ctx.accounts.stake_entry_original_mint_token_account.to_account_info(),
@@ -207,26 +201,24 @@ pub mod mint_stake {
         let cpi_context = CpiContext::new(cpi_program, cpi_accounts);
         token::transfer(cpi_context, amount)?;
 
-        if stake_pool.reset_on_stake && stake_entry.amount == 0 {
-            stake_entry.total_stake_seconds = 0;
-        }
-    
-        // update stake entry
-        stake_entry.last_staked_at = Clock::get().unwrap().unix_timestamp;
-        stake_entry.last_updated_at = Some(Clock::get().unwrap().unix_timestamp);
-        stake_entry.last_staker = ctx.accounts.user.key();
-        stake_entry.amount = stake_entry.amount.checked_add(amount).unwrap();
+        stake_pool.amount = stake_pool.amount.checked_add(amount).unwrap();
         stake_pool.total_staked = stake_pool.total_staked.checked_add(1).expect("Add error");
-    
         Ok(())
-        
+
     }
+
 }
 
 
 
 #[derive(Accounts)]
 pub struct MintNft<'info> {
+    #[account(mut)]
+    pub user: Signer<'info>,
+
+    #[account(init, payer = authority, space = 2000)]
+    pub nft_owner: Account<'info, OwnerState>,
+    pub authority: Signer<'info>,
     /// CHECK: We're about to create this with Metaplex
     #[account(mut)]
     pub metadata: UncheckedAccount<'info>,
@@ -250,63 +242,43 @@ pub struct MintNft<'info> {
 
 }
 
-
-
 #[derive(Accounts)]
-#[instruction(ix: InitPoolIx)]
-pub struct InitPoolCtx<'info> {
+pub struct Stake<'info> {
+    // CHECK account seed and init if required
+    #[account(init_if_needed, seeds=[b"user", user.key().as_ref()], bump, payer = user, space= UserInfo::len() )]
+    pub user_info: Account<'info, UserInfo>,
+    // CHECK account seed and init if required
+    #[account(init_if_needed, seeds=[b"stake_info", user.key().as_ref(), mint.key().as_ref()], bump, payer = user, space= UserStakeInfo::len() )]
+    pub staking_info: Account<'info, UserStakeInfo>,
+    // CHECK if user is signer, mut is required to reduce lamports (fees)
+    #[account(mut)]
+    pub user: Signer<'info>,
+    // CHECK if token account owner is the user and check if token amount = 1
     #[account(
-        init,
-        payer = payer,
-        space = STAKE_POOL_SIZE,
-        seeds = [a "initpool".as_bytes(), identifier.count.to_le_bytes().as_ref()],
-        bump
+        mut,
+        constraint = user_nft_account.owner.key() == user.key(),
+        constraint = user_nft_account.amount == 1
     )]
-    stake_pool: Account<'info, StakePool>,
-    #[account(mut)]
-    identifier: Account<'info, Identifier>,
-
-    #[account(mut)]
-    payer: Signer<'info>,
-    system_program: Program<'info, System>,
-}
-
-
-
-
-
-// state
-
-#[account]
-pub struct StakePool {
-    pub bump: u8,
-    pub identifier: u64,
-    pub authority: Pubkey,
-    pub requires_creators: Vec<Pubkey>,
-    pub requires_collections: Vec<Pubkey>,
-    pub requires_authorization: bool,
-    pub overlay_text: String,
-    pub image_uri: String,
-    pub reset_on_stake: bool,
-    pub total_staked: u32,
-    pub cooldown_seconds: Option<u32>,
-    pub min_stake_seconds: Option<u32>,
-    pub end_date: Option<i64>,
-    pub double_or_reset_enabled: Option<bool>,
-}
-
-
-#[derive(AnchorSerialize, AnchorDeserialize)]
-pub struct InitPoolIx {
-    overlay_text: String,
-    image_uri: String,
-    requires_collections: Vec<Pubkey>,
-    requires_creators: Vec<Pubkey>,
-    requires_authorization: bool,
-    authority: Pubkey,
-    reset_on_stake: bool,
-    cooldown_seconds: Option<u32>,
-    min_stake_seconds: Option<u32>,
-    end_date: Option<i64>,
-    double_or_reset_enabled: Option<bool>,
+    pub user_nft_account: Account<'info, TokenAccount>,
+    // Init if needed
+    #[account(
+        init_if_needed,
+        payer = user, // If init required, payer will be user
+        associated_token::mint = mint, // If init required, mint will be set to Mint
+        associated_token::authority = staking_info // If init required, authority set to PDA
+    )]
+    pub pda_nft_account: Account<'info, TokenAccount>,
+    // metadata required to check for collection verification
+    /// CHECK: Account will be validated in processor
+    pub nft_metadata: AccountInfo<'info>,
+    // mint is required to create new account for PDA and for checking
+    pub mint: Account<'info, Mint>,
+    // Token Program required to call transfer instruction
+    pub token_program: Program<'info, Token>,
+    // ATA Program required to create ATA for pda_nft_account
+    pub associated_token_program: Program<'info, AssociatedToken>,
+    // System Program requred since a new account may be created and there's a deduction of lamports (fees/rent)
+    pub system_program: Program<'info, System>,
+    // Rent required to get Rent
+    pub rent: Sysvar<'info, Rent>,
 }
