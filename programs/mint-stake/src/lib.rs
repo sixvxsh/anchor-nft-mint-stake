@@ -158,64 +158,99 @@ pub mod mint_stake {
 
         msg!("Token mint process completed successfully.");
 
-        Ok(())
+        // Ok(())
 
     }
 
+    pub fn stake(ctx: Context<Stake>) -> Result<()> {
+        // Check if user_info has been initialized
+        if !ctx.accounts.user_info.is_initialized {
+            ctx.accounts.user_info.is_initialized = true;
+            ctx.accounts.user_info.point_balance = 0;
+            ctx.accounts.user_info.active_stake = 0;
+        }
 
+        // Check if Metadata is valid
+        let metadata: Metadata =
+            Metadata::from_account_info(&ctx.accounts.metadata.to_account_info())?;
+        let collection = metadata.collection_mint.unwrap();
+        msg!("Collection ID is: {}", collection.key);
 
+        if collection.key != Pubkey::from_str(COLLECTION_ADDRESS).unwrap() && collection.verified {
+            return err!(ErrorCode::InvalidNftCollection)
+        }
 
-
-    pub fn init_pool(ctx: Context<InitPoolCtx>, ix:InitPoolIx) -> Result<()> {
-        let stake_pool = &mut ctx.accounts.stake_pool;
-        let identifier = &mut ctx.accounts.identifier;
-        stake_pool.bump = *ctx.bumps.get("stake_pool").unwrap();
-        stake_pool.identifier = identifier.count;
-        stake_pool.requires_collections = ix.requires_collections;
-        stake_pool.requires_creators = ix.requires_creators;
-        stake_pool.requires_authorization = ix.requires_authorization;
-        stake_pool.overlay_text = ix.overlay_text;
-        stake_pool.image_uri = ix.image_uri;
-        stake_pool.authority = ix.authority;
-        stake_pool.reset_on_stake = ix.reset_on_stake;
-        stake_pool.total_staked = 0;
-        stake_pool.cooldown_seconds = ix.cooldown_seconds;
-        stake_pool.min_stake_seconds = ix.min_stake_seconds;
-        stake_pool.end_date = ix.end_date;
-        stake_pool.double_or_reset_enabled = ix.double_or_reset_enabled;
-        let identifier = &mut ctx.accounts.identifier;
-        identifier.count += 1;
-        Ok(())
-    }
-
-    pub fn stake(ctx: Context<StakeCtx>, amount: u64) -> Result<()> {
-        let stake_pool = &mut ctx.accounts.stake_pool;
-        let stake_entry = &mut ctx.accounts.stake_entry;
-        // transfer
-        let cpi_accounts = token::Transfer {
-            from: ctx.accounts.user_original_mint_token_account.to_account_info(),
-            to: ctx.accounts.stake_entry_original_mint_token_account.to_account_info(),
+        // Proceed to transfer
+        let cpi_program = ctx.accounts.token_program.to_account_info();
+        let cpi_accounts = Transfer {
+            from: ctx.accounts.user_nft_account.to_account_info(),
+            to: ctx.accounts.pda_nft_account.to_account_info(),
             authority: ctx.accounts.user.to_account_info(),
         };
-        let cpi_program = ctx.accounts.token_program.to_account_info();
-        let cpi_context = CpiContext::new(cpi_program, cpi_accounts);
-        token::transfer(cpi_context, amount)?;
+        let token_transfer_context = CpiContext::new(cpi_program, cpi_accounts);
+        token::transfer(token_transfer_context, 1)?;
 
-        stake_pool.amount = stake_pool.amount.checked_add(amount).unwrap();
-        stake_pool.total_staked = stake_pool.total_staked.checked_add(1).expect("Add error");
+        // Populate staking_info info
+        ctx.accounts.staking_info.mint = ctx.accounts.mint.key();
+        ctx.accounts.staking_info.staker = ctx.accounts.user.key();
+
+        // Add user_info active stake count by 1
+        ctx.accounts.user_info.active_stake =
+            ctx.accounts.user_info.active_stake.checked_add(1).unwrap();
+
+        Ok(());
+    }
+
+    pub fn unstake(ctx: Context<Unstake>) -> Result<()> {
+        // Proceed to transfer
+        let auth_bump = *ctx.bumps.get("staking_info").unwrap();
+        let seeds = &[
+            b"stake_info".as_ref(),
+            &ctx.accounts.user.key().to_bytes(),
+            &ctx.accounts.mint.key().to_bytes(),
+            &[auth_bump],
+        ];
+        let signer = &[&seeds[..]];
+        let cpi_program = ctx.accounts.token_program.to_account_info();
+        let cpi_accounts = Transfer {
+            from: ctx.accounts.pda_nft_account.to_account_info(),
+            to: ctx.accounts.user_nft_account.to_account_info(),
+            authority: ctx.accounts.staking_info.to_account_info(),
+        };
+        let token_transfer_context = CpiContext::new_with_signer(cpi_program, cpi_accounts, signer);
+        token::transfer(token_transfer_context, 1)?;
+
+        // Calculate any remaining balance
+        let current_time = Clock::get().unwrap().unix_timestamp as u64;
+        let amount = (current_time - ctx.accounts.staking_info.last_stake_redeem) / HOUR;
+
+
+        ctx.accounts.user_info.point_balance = ctx
+            .accounts
+            .user_info
+            .point_balance
+            .checked_add(amount)
+            .unwrap();
+        ctx.accounts.staking_info.last_stake_redeem = current_time;
+
+        ctx.accounts.staking_info.stake_state = StakeState::Unstake;
+
+        ctx.accounts.user_info.active_stake =
+            ctx.accounts.user_info.active_stake.checked_sub(1).unwrap();
+
         Ok(())
 
     }
 
-}
 
+
+        
 
 
 #[derive(Accounts)]
 pub struct MintNft<'info> {
     #[account(mut)]
     pub user: Signer<'info>,
-
     #[account(init, payer = authority, space = 2000)]
     pub nft_owner: Account<'info, OwnerState>,
     pub authority: Signer<'info>,
@@ -270,7 +305,7 @@ pub struct Stake<'info> {
     pub pda_nft_account: Account<'info, TokenAccount>,
     // metadata required to check for collection verification
     /// CHECK: Account will be validated in processor
-    pub nft_metadata: AccountInfo<'info>,
+    pub metadata: AccountInfo<'info>,
     // mint is required to create new account for PDA and for checking
     pub mint: Account<'info, Mint>,
     // Token Program required to call transfer instruction
@@ -281,4 +316,60 @@ pub struct Stake<'info> {
     pub system_program: Program<'info, System>,
     // Rent required to get Rent
     pub rent: Sysvar<'info, Rent>,
+}
+
+
+
+#[derive(Accounts)]
+pub struct Unstake<'info> {
+    #[account(mut, seeds=[b"user", user.key().as_ref()], bump )]
+    pub user_info: Account<'info, UserInfo>,
+    // CHECK account seed and init if required
+    #[account(
+        mut, seeds=[b"stake_info", user.key().as_ref(), mint.key().as_ref()], bump,
+        constraint = user.key() == staking_info.staker,
+        // close = user
+    )]
+    pub staking_info: Account<'info, UserStakeInfo>,
+    // CHECK if initializer is signer, mut is required to reduce lamports (fees)
+    #[account(mut)]
+    pub user: Signer<'info>,
+    // CHECK if token account owner is correct owner, mint and has amount of 0
+    #[account(
+        mut,
+        constraint = user_nft_account.owner.key() == user.key(),
+        constraint = user_nft_account.mint == mint.key(),
+        constraint = user_nft_account.amount == 0
+    )]
+    pub user_nft_account: Account<'info, TokenAccount>,
+    // CHECK if accounts has correct owner, mint and has amount of 1
+    #[account(
+        mut,
+        constraint = pda_nft_account.owner == staking_info.key(),
+        constraint = pda_nft_account.mint == mint.key(),
+        constraint = pda_nft_account.amount == 1,
+    )]
+    pub pda_nft_account: Account<'info, TokenAccount>,
+    // mint is required to check staking_info, user_nft_account, and pda_nft_account
+    #[account(constraint = staking_info.mint == mint.key())]
+    pub mint: Account<'info, Mint>,
+    // Token Program required to call transfer instruction
+    pub token_program: Program<'info, Token>,
+    // System Program requred for deduction of lamports (fees)
+    pub system_program: Program<'info, System>,
+}
+
+
+//state
+#[account]
+pub struct UserInfo {
+    is_initialized: bool,
+    point_balance: u64,
+    active_stake: u16,
+}
+
+#[account]
+pub struct UserStakeInfo {
+    staker: Pubkey,
+    mint: Pubkey,
 }
