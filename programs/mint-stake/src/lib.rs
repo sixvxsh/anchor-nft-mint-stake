@@ -14,30 +14,23 @@ use {
         instruction as token_instruction,
     },
 };
-use anchor_spl::token::TokenAccount;
+use anchor_spl::{token::TokenAccount, associated_token::AssociatedToken};
 use anchor_spl::token::Mint;
 use anchor_spl::token::Token;
+use anchor_lang::solana_program::pubkey;
 
-
-
+// metadata_title: String,metadata_symbol: String,metadata_uri: String,collection_mint: Pubkey
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 
 #[program]
 pub mod mint_stake {
-    use anchor_lang::solana_program::pubkey;
-
+    
     use super::*;
 
-    pub fn mint_nft(
-       ctx: Context<MintNft>,
-       metadata_title: String,
-       metadata_symbol: String,
-       metadata_uri: String,
-       collection_mint: Pubkey,
-    ) -> Result<()> {
+    pub fn mint_nft(ctx: Context<MintNft>)-> Result<()> {
 
-        let pubkey = &*ctx.accounts.authority.key.to_string();
-        msg!("pubkey: {}", pubkey);
+        let pubkey = &*ctx.accounts.mint.key.to_string();
+        msg!("mint pubkey: {}", pubkey);
 
         msg!("Creating mint account...");
         msg!("Mint: {}", &ctx.accounts.mint.key());
@@ -110,14 +103,14 @@ pub mod mint_stake {
                 ctx.accounts.mint_authority.key(),
                 ctx.accounts.mint_authority.key(),
                 ctx.accounts.mint_authority.key(),
-                metadata_title,
-                metadata_symbol,
+                "Honeyland".to_string(),
+                "HL".to_string(),
                 metadata_uri,
                 None,
                 1,
                 true,
                 true,
-                collection_mint,
+                "Ctzt9WP4EF8byPEwd8AJtEmo9CxhcBc5XhbztdMKNpjV".key(),
                 //collection ^
                 None,
                 None,
@@ -158,11 +151,12 @@ pub mod mint_stake {
 
         msg!("Token mint process completed successfully.");
 
-        // Ok(())
+        Ok(())
 
     }
 
     pub fn stake(ctx: Context<Stake>) -> Result<()> {
+
         // Check if user_info has been initialized
         if !ctx.accounts.user_info.is_initialized {
             ctx.accounts.user_info.is_initialized = true;
@@ -182,10 +176,10 @@ pub mod mint_stake {
 
         // Proceed to transfer
         let cpi_program = ctx.accounts.token_program.to_account_info();
-        let cpi_accounts = Transfer {
+        let cpi_accounts = token::Transfer {
             from: ctx.accounts.user_nft_account.to_account_info(),
             to: ctx.accounts.pda_nft_account.to_account_info(),
-            authority: ctx.accounts.user.to_account_info(),
+            authority: ctx.accounts.mint_authority.to_account_info(),
         };
         let token_transfer_context = CpiContext::new(cpi_program, cpi_accounts);
         token::transfer(token_transfer_context, 1)?;
@@ -198,7 +192,8 @@ pub mod mint_stake {
         ctx.accounts.user_info.active_stake =
             ctx.accounts.user_info.active_stake.checked_add(1).unwrap();
 
-        Ok(());
+        Ok(())
+
     }
 
     pub fn unstake(ctx: Context<Unstake>) -> Result<()> {
@@ -242,25 +237,16 @@ pub mod mint_stake {
 
     }
 
-
-
-        
-
+}
 
 #[derive(Accounts)]
 pub struct MintNft<'info> {
-    #[account(mut)]
-    pub user: Signer<'info>,
-    #[account(init, payer = authority, space = 2000)]
-    pub nft_owner: Account<'info, OwnerState>,
-    pub authority: Signer<'info>,
     /// CHECK: We're about to create this with Metaplex
     #[account(mut)]
     pub metadata: UncheckedAccount<'info>,
     /// CHECK: We're about to create this with Metaplex
     #[account(mut)]
     pub master_edition: UncheckedAccount<'info>,
-    /// CHECK: We're about to create this with Metaplex
     #[account(mut)]
     pub mint: Signer<'info>,
     /// CHECK: We're about to create this with Anchor
@@ -272,33 +258,42 @@ pub struct MintNft<'info> {
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, token::Token>,
     pub associated_token_program: Program<'info, associated_token::AssociatedToken>,
-    /// CHECK: Meatplex will check this
-    pub token_metadata_program: UncheckedAccount<'info>
-
+    /// CHECK: Metaplex will check this
+    pub token_metadata_program: UncheckedAccount<'info>,
 }
 
 #[derive(Accounts)]
 pub struct Stake<'info> {
     // CHECK account seed and init if required
-    #[account(init_if_needed, seeds=[b"user", user.key().as_ref()], bump, payer = user, space= UserInfo::len() )]
+    #[account(init_if_needed, seeds=[b"user", mint_authority.key().as_ref()],
+    bump,
+    payer = mint_authority,
+    space= 8 + UserInfo::INIT_SPACE)]
+
     pub user_info: Account<'info, UserInfo>,
     // CHECK account seed and init if required
-    #[account(init_if_needed, seeds=[b"stake_info", user.key().as_ref(), mint.key().as_ref()], bump, payer = user, space= UserStakeInfo::len() )]
+    #[account(init_if_needed, seeds=[b"stake_info", 
+    mint_authority.key().as_ref(),
+    mint.key().as_ref()],
+    bump,
+    payer = mint_authority,
+    space=  8 + UserStakeInfo::INIT_SPACE)]
+
     pub staking_info: Account<'info, UserStakeInfo>,
     // CHECK if user is signer, mut is required to reduce lamports (fees)
     #[account(mut)]
-    pub user: Signer<'info>,
+    pub mint_authority: Signer<'info>,
     // CHECK if token account owner is the user and check if token amount = 1
     #[account(
         mut,
-        constraint = user_nft_account.owner.key() == user.key(),
+        constraint = user_nft_account.owner.key() == mint_authority.key(),
         constraint = user_nft_account.amount == 1
     )]
     pub user_nft_account: Account<'info, TokenAccount>,
     // Init if needed
     #[account(
         init_if_needed,
-        payer = user, // If init required, payer will be user
+        payer = mint_authority, // If init required, payer will be user
         associated_token::mint = mint, // If init required, mint will be set to Mint
         associated_token::authority = staking_info // If init required, authority set to PDA
     )]
@@ -317,8 +312,6 @@ pub struct Stake<'info> {
     // Rent required to get Rent
     pub rent: Sysvar<'info, Rent>,
 }
-
-
 
 #[derive(Accounts)]
 pub struct Unstake<'info> {
@@ -362,14 +355,18 @@ pub struct Unstake<'info> {
 
 //state
 #[account]
+#[derive(InitSpace)]
 pub struct UserInfo {
     is_initialized: bool,
     point_balance: u64,
     active_stake: u16,
+    bump: u8,
 }
 
 #[account]
+#[derive(InitSpace)]
 pub struct UserStakeInfo {
     staker: Pubkey,
     mint: Pubkey,
+    bump: u8,
 }
