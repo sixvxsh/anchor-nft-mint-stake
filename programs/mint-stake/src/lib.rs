@@ -134,6 +134,7 @@ pub mod mint_stake {
         ctx.accounts.collection_mint.to_account_info(),
         ]
     )?;
+    msg!("collection account created.");
 
     msg!("Creating metadata account...");
     msg!("Metadata account address: {}", &ctx.accounts.metadata.to_account_info().key());
