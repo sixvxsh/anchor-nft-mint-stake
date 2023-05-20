@@ -7,17 +7,22 @@ use {
     anchor_spl::{
         associated_token,
         token,
+        metadata,
+        
     
     },
     mpl_token_metadata::{
         ID as TOKEN_METADATA_ID,
         instruction as token_instruction,
+        metadata_seeds,
+        metadata,
     },
 };
 use anchor_spl::{token::TokenAccount, associated_token::AssociatedToken};
 use anchor_spl::token::Mint;
 use anchor_spl::token::Token;
 use anchor_lang::solana_program::pubkey;
+use mpl_token_metadata::instruction::{create_master_edition_v3, create_metadata_accounts_v2};
 
 // metadata_title: String,metadata_symbol: String,metadata_uri: String,collection_mint: Pubkey
 declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
@@ -25,13 +30,17 @@ declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 #[program]
 pub mod mint_stake {
     
+    use anchor_lang::accounts::account_info;
+    use mpl_token_metadata::state::Collection;
+
     use super::*;
 
+    
     pub fn mint_nft(ctx: Context<MintNft>,
         metadata_title: String, 
         metadata_symbol: String, 
         metadata_uri: String,
-        metadata_collection: Pubkey,
+        metadata_collection: Option<mpl_token_metadata::state::CollectionDetails>,
     )-> Result<()> {
 
         let pubkey = &*ctx.accounts.mint.key.to_string();
@@ -98,6 +107,16 @@ pub mod mint_stake {
             1
         )?;
 
+
+        let creator = vec![
+            mpl_token_metadata::state::Creator{
+                address: ctx.accounts.mint_authority.key(),
+                verified: false,
+                share: 100,
+            },
+        ];
+        msg!("Creator Assigned");
+
         msg!("Creating metadata account...");
         msg!("Metadata account address: {}", &ctx.accounts.metadata.to_account_info().key());
         invoke(
@@ -108,15 +127,14 @@ pub mod mint_stake {
                 ctx.accounts.mint_authority.key(),
                 ctx.accounts.mint_authority.key(),
                 ctx.accounts.mint_authority.key(),
-                "Honeyland".to_string(),
-                "HL".to_string(),
+                metadata_title,
+                metadata_symbol,
                 metadata_uri,
                 None,
                 1,
                 true,
                 true,
-                "Ctzt9WP4EF8byPEwd8AJtEmo9CxhcBc5XhbztdMKNpjV".key(),
-                //collection ^
+                Some(creator),
                 None,
                 None,
                 
@@ -247,8 +265,19 @@ pub mod mint_stake {
 #[derive(Accounts)]
 pub struct MintNft<'info> {
     /// CHECK: We're about to create this with Metaplex
-    #[account(mut)]
-    pub metadata: UncheckedAccount<'info>,
+    #[account(
+        seeds = [
+            b"metadata", 
+            MPL_TOKEN_METADATA_ID.as_ref(), 
+            mint.key().as_ref()
+        ],
+        seeds::program = MPL_TOKEN_METADATA_ID,
+        bump,
+        constraint = metadata_account.collection.as_ref().unwrap().verified @ Errors::CollectionNotVerified,
+        constraint = metadata_account.collection.as_ref().unwrap().key ==
+        collection_details.key() @ Errors::CollectionNotSame
+    )]
+    pub metadata: Account<'info,MetadataAccount>,
     /// CHECK: We're about to create this with Metaplex
     #[account(mut)]
     pub master_edition: UncheckedAccount<'info>,
