@@ -10,6 +10,10 @@ describe("mint-stake", async () => {
   const wallet = provider.wallet as anchor.Wallet;
   anchor.setProvider(provider);
 
+
+  const NftTitle = "Gold Pass #057";
+  const NftSymbol = "HL_Gold";
+  const NftUri = "https://storage.googleapis.com/fractal-launchpad-public-assets/honeyland/assets_gold_pass/57.json";
   //default config
   // anchor.setProvider(anchor.AnchorProvider.env());
 
@@ -20,6 +24,7 @@ describe("mint-stake", async () => {
   const program = anchor.workspace.MintStake as Program<MintStake>;
 
   const TOKEN_METADATA_PROGRAM_ID = new anchor.web3.PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
+  // const TOKEN_PROGRAM_ID = new anchor.web3.PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA");
 
 
   const MintKeypair: anchor.web3.Keypair = anchor.web3.Keypair.generate();
@@ -55,7 +60,11 @@ describe("mint-stake", async () => {
 
 
   //interact with our mint-stake on-chain program 
-  await program.methods.mintNft()
+  await program.methods.mintNft(
+    NftTitle,
+    NftSymbol,
+    NftUri
+  )
   .accounts({
     masterEdition: masterEditionAddress,
     metadata: metadataAddress,
