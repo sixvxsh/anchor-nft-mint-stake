@@ -27,7 +27,12 @@ pub mod mint_stake {
     
     use super::*;
 
-    pub fn mint_nft(ctx: Context<MintNft>)-> Result<()> {
+    pub fn mint_nft(ctx: Context<MintNft>,
+        metadata_title: String, 
+        metadata_symbol: String, 
+        metadata_uri: String,
+        metadata_collection: Pubkey,
+    )-> Result<()> {
 
         let pubkey = &*ctx.accounts.mint.key.to_string();
         msg!("mint pubkey: {}", pubkey);
@@ -165,7 +170,7 @@ pub mod mint_stake {
         }
 
         // Check if Metadata is valid
-        let metadata: Metadata =
+        let metadata: metadata =
             Metadata::from_account_info(&ctx.accounts.metadata.to_account_info())?;
         let collection = metadata.collection_mint.unwrap();
         msg!("Collection ID is: {}", collection.key);
