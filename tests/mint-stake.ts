@@ -32,35 +32,35 @@ const mintnft =  async () => {
   const TOKEN_METADATA_PROGRAM_ID = new anchor.web3.PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
 
 
-  const MintKeypair: anchor.web3.Keypair = anchor.web3.Keypair.generate();
-  console.log(`mintkeypairPublic: ${MintKeypair.publicKey}`);
-  console.log(`mintkeypairSecret: ${MintKeypair.secretKey}`);
+  const MintKey: anchor.web3.Keypair = anchor.web3.Keypair.generate();
+  console.log(`MintKeyPublic: ${MintKey.publicKey}`);
+  console.log(`MintKeySecret: ${MintKey.secretKey}`);
 
 
   const TokenAddress = await anchor.utils.token.associatedAddress({
-    mint: MintKeypair.publicKey,
+    mint: MintKey.publicKey,
     owner: wallet.publicKey
   });
-  console.log(` Mint Address: ${MintKeypair.publicKey}`);
-  console.log(` Token  address (ATA) Address: ${TokenAddress}`);
+  console.log(` Mint Address: ${MintKey.publicKey}`);
+  console.log(` Token  address (ATA) Address: ${TokenAddress.toBase58()}`);
   
   //find pda for metadata
   const metadataAddress = (await anchor.web3.PublicKey.findProgramAddressSync(
     [
       Buffer.from("metadata"),
       TOKEN_METADATA_PROGRAM_ID.toBuffer(),
-      MintKeypair.publicKey.toBuffer(),
+      MintKey.publicKey.toBuffer(),
     ],
     TOKEN_METADATA_PROGRAM_ID
   ))[0]
-  console.log(`metadata initialized and its address ${metadataAddress}`)
+  console.log(`metadata initialized and its address ${metadataAddress.toBase58()}`)
 
   //find Pda for masteredition
   const masterEditionAddress = (await anchor.web3.PublicKey.findProgramAddressSync(
     [
       Buffer.from("metadata"),
       TOKEN_METADATA_PROGRAM_ID.toBuffer(),
-      MintKeypair.publicKey.toBuffer(),
+      MintKey.publicKey.toBuffer(),
       Buffer.from("edition"),
     ],
     TOKEN_METADATA_PROGRAM_ID
@@ -70,18 +70,18 @@ const mintnft =  async () => {
 
   //interact with our mint-stake on-chain program 
   await program.methods.mintNft(
-    NftTitle,NftSymbol,NftUri,collectionAddress,
+    NftTitle,NftSymbol,NftUri,
   )
   .accounts({
     masterEdition: masterEditionAddress,
     metadata: metadataAddress,
-    mint: MintKeypair.publicKey,
+    mint: MintKey.publicKey,
     mintAuthority: wallet.publicKey,
     tokenAccount: TokenAddress,
     tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
     tokenProgram: TOKEN_PROGRAM_ID,
   })
-  .signers([MintKeypair])
+  .signers([MintKey])
   .rpc();
 
   // it("Is initialized!", async () => {
