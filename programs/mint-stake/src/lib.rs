@@ -223,15 +223,15 @@ pub mod mint_stake {
             ctx.accounts.user_info.active_stake = 0;
         }
 
-        // Check if Metadata is valid
-        let metadata: metadata =
-            mpl_token_metadata::state::Metadata::from_account_info(&ctx.accounts.metadata.to_account_info())?;
-        let collection = metadata.collection_mint.unwrap();
-        msg!("Collection ID is: {}", collection.key);
+        // // Check if Metadata is valid
+        // let metadata: metadata =
+        //     mpl_token_metadata::state::Metadata::from_account_info(&ctx.accounts.metadata.to_account_info())?;
+        // let collection = metadata.collection_mint.unwrap();
+        // msg!("Collection ID is: {}", collection.key);
 
-        if collection.key != Pubkey::from_str(COLLECTION_ADDRESS).unwrap() && collection.verified {
-            return err!(ErrorCode::InvalidNftCollection)
-        }
+        // if collection.key != Pubkey::from_str(COLLECTION_ADDRESS).unwrap() && collection.verified {
+        //     return err!(ErrorCode::InvalidNftCollection)
+        // }
 
         // Proceed to transfer
         let cpi_program = ctx.accounts.token_program.to_account_info();
@@ -245,7 +245,7 @@ pub mod mint_stake {
 
         // Populate staking_info info
         ctx.accounts.staking_info.mint = ctx.accounts.mint.key();
-        ctx.accounts.staking_info.staker = ctx.accounts.user.key();
+        ctx.accounts.staking_info.staker = ctx.accounts.mint_authority.key();
 
         // Add user_info active stake count by 1
         ctx.accounts.user_info.active_stake =
@@ -260,13 +260,13 @@ pub mod mint_stake {
         let auth_bump = *ctx.bumps.get("staking_info").unwrap();
         let seeds = &[
             b"stake_info".as_ref(),
-            &ctx.accounts.user.key().to_bytes(),
+            &ctx.accounts.mint_authority.key().to_bytes(),
             &ctx.accounts.mint.key().to_bytes(),
             &[auth_bump],
         ];
         let signer = &[&seeds[..]];
         let cpi_program = ctx.accounts.token_program.to_account_info();
-        let cpi_accounts = Transfer {
+        let cpi_accounts = token::Transfer {
             from: ctx.accounts.pda_nft_account.to_account_info(),
             to: ctx.accounts.user_nft_account.to_account_info(),
             authority: ctx.accounts.staking_info.to_account_info(),
@@ -287,7 +287,7 @@ pub mod mint_stake {
             .unwrap();
         ctx.accounts.staking_info.last_stake_redeem = current_time;
 
-        ctx.accounts.staking_info.stake_state = StakeState::Unstake;
+        ctx.accounts.staking_info.stake_state = StakeState::Unstaked;
 
         ctx.accounts.user_info.active_stake =
             ctx.accounts.user_info.active_stake.checked_sub(1).unwrap();
@@ -437,12 +437,17 @@ pub struct UserStakeInfo {
     staker: Pubkey,
     mint: Pubkey,
     bump: u8,
+    last_stake_redeem: u64,
+    stake_state: StakeState,
 }
 
 
 
-
-
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy)]
+pub enum StakeState {
+    Staked,
+    Unstaked,
+}
 
 
 
