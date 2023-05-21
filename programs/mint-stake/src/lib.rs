@@ -13,8 +13,7 @@ use {
     },
     mpl_token_metadata::{
         ID as TOKEN_METADATA_ID,
-        // instruction as token_instruction,
-        metadata,
+        instruction as token_instruction,
     },
     mpl_token_metadata::instruction::
     {create_master_edition_v3,
@@ -24,6 +23,7 @@ use {
 // use anchor_spl::token::Mint;
 // use anchor_spl::token::Token;
 use anchor_lang::solana_program::pubkey;
+use anchor_spl::{associated_token::AssociatedToken, token::{Token, Mint, TokenAccount}};
 
 
 
@@ -34,12 +34,12 @@ declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 pub mod mint_stake {
     
     use anchor_lang::accounts::account_info;
-    use mpl_token_metadata::state::Collection;
+    use mpl_token_metadata::{state::Collection, instruction::Mint};
 
     use super::*;
 
     
-    pub fn mint_nft(ctx: Context<MintNft>, metadata_title: String, metadata_symbol: String, metadata_uri: String)-> Result<()> {
+    pub fn mint_nft(ctx: Context<MintNft>, metadata_title: String, metadata_symbol: String, metadata_uri: String, collection_key: Pubkey, )-> Result<()> {
 
     let pubkey = &*ctx.accounts.mint.key.to_string();
     msg!("mint pubkey: {}", pubkey);
@@ -116,25 +116,33 @@ pub mod mint_stake {
     msg!("Creator Assigned");
 
 
-    msg!("Creating collection account...");
-    invoke(
-        &mpl_token_metadata::instruction::set_and_verify_collection(
-            TOKEN_METADATA_ID,
-            ctx.accounts.metadata.key(),
-            ctx.accounts.mint_authority.key(),
-            ctx.accounts.mint_authority.key(),
-            ctx.accounts.mint_authority.key(),
-            ctx.accounts.collection_mint.key(),
-        ),
-        &[
-        ctx.accounts.metadata.to_account_info(),
-        ctx.accounts.mint_authority.to_account_info(),
-        ctx.accounts.mint_authority.to_account_info(),
-        ctx.accounts.mint_authority.to_account_info(),
-        ctx.accounts.collection_mint.to_account_info(),
-        ]
-    )?;
-    msg!("collection account created.");
+    // msg!("Creating collection account...");
+    // invoke(
+    //     &mpl_token_metadata::instruction::set_and_verify_collection(
+    //         TOKEN_METADATA_ID,
+    //         ctx.accounts.metadata.key(),
+    //         ctx.accounts.collection_authority.key(),
+    //         ctx.accounts.payer.key(),
+    //         ctx.accounts.update_authority.key(),
+    //         ctx.accounts.collection_mint.key(),
+    //         collection,
+    //         ctx.accounts.collection_master_edition.key(),
+    //         None,
+    //     ),
+    //     &[
+    //     ctx.accounts.metadata.to_account_info(),
+    //     ctx.accounts.mint_authority.to_account_info(),
+    //     ctx.accounts.mint_authority.to_account_info(),
+    //     ctx.accounts.mint_authority.to_account_info(),
+    //     ctx.accounts.collection_mint.to_account_info(),
+    //     ]
+    // )?;
+    // msg!("collection account created.");
+
+    let collection = mpl_token_metadata::state::Collection {
+        verified: false,
+        key: collection_key,
+      };
 
     msg!("Creating metadata account...");
     msg!("Metadata account address: {}", &ctx.accounts.metadata.to_account_info().key());
@@ -144,16 +152,16 @@ pub mod mint_stake {
             ctx.accounts.metadata.key(),
             ctx.accounts.mint.key(),
             ctx.accounts.mint_authority.key(),
-            ctx.accounts.mint_authority.key(),
-            ctx.accounts.mint_authority.key(),
+            ctx.accounts.payer.key(),
+            ctx.accounts.update_authority.key(),
             metadata_title,
             metadata_symbol,
             metadata_uri,
             None,
-            1,
+            500,
             true,
             true,
-            Some(creator),
+            Some(collection),
             None,
             None,
             
@@ -163,6 +171,11 @@ pub mod mint_stake {
         ctx.accounts.mint.to_account_info(),
         ctx.accounts.token_account.to_account_info(),
         ctx.accounts.mint_authority.to_account_info(),
+        ctx.accounts.rent.to_account_info(),
+        ctx.accounts.payer.to_account_info(),
+        ctx.accounts.token_metadata_program.to_account_info(),
+        ctx.accounts.token_program.to_account_info(),
+        ctx.accounts.system_program.to_account_info(),
         ctx.accounts.rent.to_account_info(),
         ],
     )?;
@@ -175,10 +188,10 @@ pub mod mint_stake {
             TOKEN_METADATA_ID, 
             ctx.accounts.master_edition.key(), 
             ctx.accounts.mint.key(), 
-            ctx.accounts.mint_authority.key(), 
+            ctx.accounts.update_authority.key(), 
             ctx.accounts.mint_authority.key(), 
             ctx.accounts.metadata.key(), 
-            ctx.accounts.mint_authority.key(), 
+            ctx.accounts.payer.key(), 
             Some(0),
         ),
         &[
@@ -188,6 +201,10 @@ pub mod mint_stake {
         ctx.accounts.token_account.to_account_info(),
         ctx.accounts.mint_authority.to_account_info(),
         ctx.accounts.rent.to_account_info(),
+        ctx.accounts.payer.to_account_info(),
+        ctx.accounts.token_metadata_program.to_account_info(),
+        ctx.accounts.token_program.to_account_info(),
+        ctx.accounts.system_program.to_account_info(),
         ],
     )?;
 
@@ -208,7 +225,7 @@ pub mod mint_stake {
 
         // Check if Metadata is valid
         let metadata: metadata =
-            Metadata::from_account_info(&ctx.accounts.metadata.to_account_info())?;
+            mpl_token_metadata::state::Metadata::from_account_info(&ctx.accounts.metadata.to_account_info())?;
         let collection = metadata.collection_mint.unwrap();
         msg!("Collection ID is: {}", collection.key);
 
@@ -300,6 +317,11 @@ pub struct MintNft<'info> {
     pub token_account: UncheckedAccount<'info>,
     #[account(mut)]
     pub mint_authority: Signer<'info>,
+    pub collection_authority: AccountInfo<'info>,
+    pub payer: AccountInfo<'info>,
+    pub update_authority: AccountInfo<'info>,
+    pub collection_metadata: AccountInfo<'info>,
+    pub collection_master_edition: AccountInfo<'info>,
     pub rent: Sysvar<'info, Rent>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, token::Token>,
@@ -361,22 +383,22 @@ pub struct Stake<'info> {
 
 #[derive(Accounts)]
 pub struct Unstake<'info> {
-    #[account(mut, seeds=[b"user", user.key().as_ref()], bump )]
+    #[account(mut, seeds=[b"user", mint_authority.key().as_ref()], bump )]
     pub user_info: Account<'info, UserInfo>,
     // CHECK account seed and init if required
     #[account(
-        mut, seeds=[b"stake_info", user.key().as_ref(), mint.key().as_ref()], bump,
-        constraint = user.key() == staking_info.staker,
-        // close = user
+        mut, seeds=[b"stake_info", mint_authority.key().as_ref(), mint.key().as_ref()], bump,
+        constraint = mint_authority.key() == staking_info.staker,
+        close = mint_authority
     )]
     pub staking_info: Account<'info, UserStakeInfo>,
     // CHECK if initializer is signer, mut is required to reduce lamports (fees)
     #[account(mut)]
-    pub user: Signer<'info>,
+    pub mint_authority: Signer<'info>,
     // CHECK if token account owner is correct owner, mint and has amount of 0
     #[account(
         mut,
-        constraint = user_nft_account.owner.key() == user.key(),
+        constraint = user_nft_account.owner.key() == mint_authority.key(),
         constraint = user_nft_account.mint == mint.key(),
         constraint = user_nft_account.amount == 0
     )]

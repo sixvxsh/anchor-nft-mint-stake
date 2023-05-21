@@ -69,7 +69,7 @@ const mintnft =  async () => {
 
 
   //interact with our mint-stake on-chain program 
-  await program.methods.mintNft(
+  const tx = await program.methods.mintNft(
     NftTitle,NftSymbol,NftUri,
   )
   .accounts({
@@ -83,6 +83,10 @@ const mintnft =  async () => {
   })
   .signers([MintKey])
   .rpc();
+
+  await sendTransaction(tx, connection)
+
+  setTransactionUrl(`https://explorer.solana.com/tx/${tx}?cluster=devnet`)
 
   // it("Is initialized!", async () => {
   //   // Add your test here.
