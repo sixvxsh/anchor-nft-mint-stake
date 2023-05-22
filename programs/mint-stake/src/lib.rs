@@ -24,7 +24,7 @@ use {
 // use anchor_spl::token::Token;
 use anchor_lang::solana_program::pubkey;
 use anchor_spl::{associated_token::AssociatedToken, token::{Token, Mint, TokenAccount}};
-
+use anchor_lang::{prelude::*, Space};
 
 
 // metadata_title: String,metadata_symbol: String,metadata_uri: String,collection_mint: Pubkey
@@ -257,7 +257,7 @@ pub mod mint_stake {
 
     pub fn unstake(ctx: Context<Unstake>) -> Result<()> {
         // Proceed to transfer
-        let auth_bump = *ctx.bumps.get("staking_info").unwrap();
+        let auth_bump = *ctx.bumps.get("staking_info").unwrap(); // staking_info points to the name of the account
         let seeds = &[
             b"stake_info".as_ref(),
             &ctx.accounts.mint_authority.key().to_bytes(),
@@ -438,12 +438,13 @@ pub struct UserStakeInfo {
     mint: Pubkey,
     bump: u8,
     last_stake_redeem: u64,
-    stake_state: StakeState,
+    stake_state: StakeState
 }
 
 
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy)]
+#[derive(InitSpace)]
 pub enum StakeState {
     Staked,
     Unstaked,

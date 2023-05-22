@@ -1153,6 +1153,9 @@ dependencies = [
  "anchor-lang",
  "anchor-spl",
  "mpl-token-metadata",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
  "winnow",
 ]
 

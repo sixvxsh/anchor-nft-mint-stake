@@ -7,6 +7,7 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib", "lib"]
 name = "mint_stake"
+proc-macro = true
 
 [features]
 no-entrypoint = []
@@ -20,3 +21,6 @@ anchor-lang = {version = "0.27.0", features = ["init-if-needed"]}
 anchor-spl = {version = "0.27.0",features = ["metadata"]}
 winnow = "=0.4.1"
 mpl-token-metadata = { version = "=1.9.0", features = ["no-entrypoint"] }
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = "1.0"
