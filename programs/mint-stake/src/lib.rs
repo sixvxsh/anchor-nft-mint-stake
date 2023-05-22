@@ -276,7 +276,7 @@ pub mod mint_stake {
 
         // Calculate any remaining balance
         let current_time = Clock::get().unwrap().unix_timestamp as u64;
-        let amount = (current_time - ctx.accounts.staking_info.last_stake_redeem) / HOUR;
+        let amount = current_time - ctx.accounts.staking_info.last_stake_redeem;
 
 
         ctx.accounts.user_info.point_balance = ctx
