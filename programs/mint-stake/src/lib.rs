@@ -7,7 +7,6 @@ use {
     anchor_spl::{
         associated_token,
         token,
-        metadata,
         
     
     },
@@ -15,16 +14,16 @@ use {
         ID as TOKEN_METADATA_ID,
         instruction as token_instruction,
     },
-    mpl_token_metadata::instruction::
-    {create_master_edition_v3,
-    create_metadata_accounts_v3},
+    // mpl_token_metadata::instruction::
+    // {create_master_edition_v3,
+    // create_metadata_accounts_v3},
 };
 // use anchor_spl::{token::TokenAccount, associated_token::AssociatedToken};
 // use anchor_spl::token::Mint;
 // use anchor_spl::token::Token;
-use anchor_lang::solana_program::pubkey;
+
 use anchor_spl::{associated_token::AssociatedToken, token::{Token, Mint, TokenAccount}};
-use anchor_lang::{prelude::*, Space};
+use anchor_lang::Space;
 
 
 // metadata_title: String,metadata_symbol: String,metadata_uri: String,collection_mint: Pubkey
@@ -33,8 +32,8 @@ declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
 #[program]
 pub mod mint_stake {
     
-    use anchor_lang::accounts::account_info;
-    use mpl_token_metadata::{state::Collection, instruction::Mint};
+    // use anchor_lang::accounts::account_info;
+    // use mpl_token_metadata::{state::Collection, instruction::Mint};
 
     use super::*;
 

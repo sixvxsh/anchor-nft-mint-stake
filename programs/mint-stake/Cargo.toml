@@ -17,10 +17,11 @@ cpi = ["no-entrypoint"]
 default = []
 
 [dependencies]
-anchor-lang = {version = "0.27.0", features = ["init-if-needed"]}
-anchor-spl = {version = "0.27.0",features = ["metadata"]}
+anchor-lang = { git = "https://github.com/coral-xyz/anchor", features = ["init-if-needed"] }
+anchor-spl = {git = "https://github.com/coral-xyz/anchor"}
 winnow = "=0.4.1"
 mpl-token-metadata = { version = "=1.9.0", features = ["no-entrypoint"] }
 proc-macro2 = "1.0"
+toml_datetime = "=0.6.1"
 quote = "1.0"
 syn = "1.0"
