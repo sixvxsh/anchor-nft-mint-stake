@@ -18,27 +18,15 @@ use {
     // {create_master_edition_v3,
     // create_metadata_accounts_v3},
 };
-// use anchor_spl::{token::TokenAccount, associated_token::AssociatedToken};
-// use anchor_spl::token::Mint;
-// use anchor_spl::token::Token;
-
 use anchor_spl::{associated_token::AssociatedToken, token::{Token, Mint, TokenAccount}};
 use anchor_lang::Space;
-
-
-// metadata_title: String,metadata_symbol: String,metadata_uri: String,collection_mint: Pubkey
-declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+declare_id!("6BSa8i1o46Q7GfRaZrc7aBSNThyZEr1WUfQ6GKhqwYUK");
 
 #[program]
-pub mod mint_stake {
-    
-    // use anchor_lang::accounts::account_info;
-    // use mpl_token_metadata::{state::Collection, instruction::Mint};
-
+pub mod mint_stake2 {
     use super::*;
 
-    
-    pub fn mint_nft(ctx: Context<MintNft>, metadata_title: String, metadata_symbol: String, metadata_uri: String, collection_key: Pubkey, )-> Result<()> {
+    pub fn mint_nft(ctx: Context<MintNft>,metadata_title: String,metadata_symbol: String,metadata_uri: String,collection_key: Pubkey,) -> Result<()> {
 
     let pubkey = &*ctx.accounts.mint.key.to_string();
     msg!("mint pubkey: {}", pubkey);
@@ -63,7 +51,7 @@ pub mod mint_stake {
         CpiContext::new(
             ctx.accounts.token_program.to_account_info(),
             token::InitializeMint {
-                mint: ctx.accounts.token_program.to_account_info(),
+                mint: ctx.accounts.mint.to_account_info(),
                 rent: ctx.accounts.rent.to_account_info(),
             }
         ),
@@ -141,7 +129,7 @@ pub mod mint_stake {
     let collection = mpl_token_metadata::state::Collection {
         verified: false,
         key: collection_key,
-      };
+        };
 
     msg!("Creating metadata account...");
     msg!("Metadata account address: {}", &ctx.accounts.metadata.to_account_info().key());
@@ -151,8 +139,8 @@ pub mod mint_stake {
             ctx.accounts.metadata.key(),
             ctx.accounts.mint.key(),
             ctx.accounts.mint_authority.key(),
-            ctx.accounts.payer.key(),
-            ctx.accounts.update_authority.key(),
+            ctx.accounts.mint_authority.key(),
+            ctx.accounts.mint_authority.key().key(),
             metadata_title,
             metadata_symbol,
             metadata_uri,
@@ -170,9 +158,6 @@ pub mod mint_stake {
         ctx.accounts.mint.to_account_info(),
         ctx.accounts.token_account.to_account_info(),
         ctx.accounts.mint_authority.to_account_info(),
-        ctx.accounts.rent.to_account_info(),
-        ctx.accounts.payer.to_account_info(),
-        ctx.accounts.token_metadata_program.to_account_info(),
         ctx.accounts.token_program.to_account_info(),
         ctx.accounts.system_program.to_account_info(),
         ctx.accounts.rent.to_account_info(),
@@ -187,10 +172,10 @@ pub mod mint_stake {
             TOKEN_METADATA_ID, 
             ctx.accounts.master_edition.key(), 
             ctx.accounts.mint.key(), 
-            ctx.accounts.update_authority.key(), 
+            ctx.accounts.mint_authority.key(), 
             ctx.accounts.mint_authority.key(), 
             ctx.accounts.metadata.key(), 
-            ctx.accounts.payer.key(), 
+            ctx.accounts.mint_authority.key(), 
             Some(0),
         ),
         &[
@@ -200,9 +185,6 @@ pub mod mint_stake {
         ctx.accounts.token_account.to_account_info(),
         ctx.accounts.mint_authority.to_account_info(),
         ctx.accounts.rent.to_account_info(),
-        ctx.accounts.payer.to_account_info(),
-        ctx.accounts.token_metadata_program.to_account_info(),
-        ctx.accounts.token_program.to_account_info(),
         ctx.accounts.system_program.to_account_info(),
         ],
     )?;
@@ -294,10 +276,10 @@ pub mod mint_stake {
         Ok(())
 
     }
-
+    
+    
+    
 }
-
-
 
 #[derive(Accounts)]
 pub struct MintNft<'info> {
@@ -316,11 +298,6 @@ pub struct MintNft<'info> {
     pub token_account: UncheckedAccount<'info>,
     #[account(mut)]
     pub mint_authority: Signer<'info>,
-    pub collection_authority: AccountInfo<'info>,
-    pub payer: AccountInfo<'info>,
-    pub update_authority: AccountInfo<'info>,
-    pub collection_metadata: AccountInfo<'info>,
-    pub collection_master_edition: AccountInfo<'info>,
     pub rent: Sysvar<'info, Rent>,
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, token::Token>,
@@ -380,6 +357,8 @@ pub struct Stake<'info> {
     pub rent: Sysvar<'info, Rent>,
 }
 
+
+
 #[derive(Accounts)]
 pub struct Unstake<'info> {
     #[account(mut, seeds=[b"user", mint_authority.key().as_ref()], bump )]
@@ -420,7 +399,10 @@ pub struct Unstake<'info> {
 }
 
 
-//state
+
+
+
+
 #[account]
 #[derive(InitSpace)]
 pub struct UserInfo {
@@ -442,18 +424,10 @@ pub struct UserStakeInfo {
 
 
 
+
 #[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy)]
 #[derive(InitSpace)]
 pub enum StakeState {
     Staked,
     Unstaked,
 }
-
-
-
-
-
-
-// String::from("OKU - Bitoku Storage"), // name,
-// String::from("OKU"), // symbol,
-// String::from("https://okupub.gitlab.io/imgs/Oku.json"), // uri,
