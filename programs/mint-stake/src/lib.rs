@@ -26,10 +26,16 @@ declare_id!("6BSa8i1o46Q7GfRaZrc7aBSNThyZEr1WUfQ6GKhqwYUK");
 pub mod mint_stake2 {
     use super::*;
 
-    pub fn mint_nft(ctx: Context<MintNft>,metadata_title: String,metadata_symbol: String,metadata_uri: String,collection_key: Pubkey,) -> Result<()> {
+    pub fn mint_nft(
+        ctx: Context<MintNft>,
+        metadata_title: String,
+        metadata_symbol: String,
+        metadata_uri: String,
+        collection_key: Pubkey
+    ) -> Result<()> {
 
-    let pubkey = &*ctx.accounts.mint.key.to_string();
-    msg!("mint pubkey: {}", pubkey);
+    // let pubkey = &*ctx.accounts.mint.key.to_string();
+    // msg!("mint pubkey: {}", pubkey);
 
     msg!("Creating mint account...");
     msg!("Mint: {}", &ctx.accounts.mint.key());
@@ -92,15 +98,14 @@ pub mod mint_stake2 {
         1
     )?;
 
-
-    let creator = vec![
-        mpl_token_metadata::state::Creator{
-            address: ctx.accounts.mint_authority.key(),
-            verified: false,
-            share: 100,
-        },
-    ];
-    msg!("Creator Assigned");
+    // let creator = vec![
+    //     mpl_token_metadata::state::Creator{
+    //         address: ctx.accounts.mint_authority.key(),
+    //         verified: false,
+    //         share: 100,
+    //     },
+    // ];
+    // msg!("Creator Assigned");
 
 
     // msg!("Creating collection account...");
@@ -290,7 +295,7 @@ pub struct MintNft<'info> {
     #[account(mut)]
     pub master_edition: UncheckedAccount<'info>,
     /// CHECK: We're about to create this with Metaplex
-    pub collection_mint: UncheckedAccount<'info>,
+    // pub collection_mint: UncheckedAccount<'info>,
     #[account(mut)]
     pub mint: Signer<'info>,
     /// CHECK: We're about to create this with Anchor
