@@ -20,7 +20,7 @@ describe( "MINT-NFT DESCRIBE",  () => {
   const nft_title: string = "Gold Pass #057";
   const nft_symbol: string = "HL_Gold";
   const nft_uri: string = "https://storage.googleapis.com/fractal-launchpad-public-assets/honeyland/assets_gold_pass/57.json";
-  // const collection_key = "EvVQKAxTAb3UWVqBsAJUt18Pew1Y1Km4M6z7qK1qKqHY";
+  const collection_key = "EvVQKAxTAb3UWVqBsAJUt18Pew1Y1Km4M6z7qK1qKqHY";
 
   const TOKEN_METADATA_PROGRAM_ID = new anchor.web3.PublicKey("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
   const ASSOCIATED_TOKEN_PROGRAM =  new anchor.web3.PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
@@ -115,7 +115,8 @@ describe( "MINT-NFT DESCRIBE",  () => {
       let mintix = await program.methods.mintNft(
         nft_title,
         nft_symbol,
-        nft_uri
+        nft_uri,
+        new PublicKey(collection_key),
       )
       .accounts({
         metadata: metadataAddress,
