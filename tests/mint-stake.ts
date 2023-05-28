@@ -1,7 +1,7 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program, AnchorProvider } from "@coral-xyz/anchor";
 import { MintStake2 } from "../target/types/mint_stake2";
-import {ComputeBudgetProgram, Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, SYSVAR_RENT_PUBKEY, SystemProgram, Transaction} from "@solana/web3.js"
+import {ComputeBudgetProgram, Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, SYSVAR_RENT_PUBKEY, SystemProgram, Transaction, TransactionInstruction, sendAndConfirmRawTransaction, sendAndConfirmTransaction} from "@solana/web3.js"
 import NodeWallet from "@coral-xyz/anchor/dist/cjs/nodewallet";
 import { assert, expect } from "chai";
 import { Mint, TOKEN_PROGRAM_ID, getAssociatedTokenAddress } from "@solana/spl-token";
@@ -31,18 +31,9 @@ describe( "MINT-NFT DESCRIBE",  () => {
   const wallet = provider.wallet as anchor.Wallet;
   anchor.setProvider(anchor.AnchorProvider.env());
   const localpublickey = anchor.AnchorProvider.local().wallet.publicKey;
-  console.log("local pubkey ===>" , localpublickey);
-  
-
-  // const blockhash = async () => {
-  //   try {
-  //     await provider.connection.getLatestBlockhash("finalized");
-  //     return blockhash;
-  //   } catch (error) {
-  //     console.log(`BLOCKHASH ERROR ${error}`);
-  //   } 
-  // };
-  
+  console.log("-----------------------");
+  console.log("WALLET PUBKEY ===>" , localpublickey);
+ 
 
   //default config
   // anchor.setProvider(anchor.AnchorProvider.env());
@@ -52,6 +43,7 @@ describe( "MINT-NFT DESCRIBE",  () => {
   
 
   const MintKey: anchor.web3.Keypair = anchor.web3.Keypair.generate();
+  console.log("-----------------------");
   console.log(`MintKeyPublic ===>  ${MintKey.publicKey}`);
   // const MintKey = Keypair.fromSecretKey(
   //   bs58.decode(
@@ -59,42 +51,12 @@ describe( "MINT-NFT DESCRIBE",  () => {
   //   )
   // )
   
-  
-  // const signature = await program.provider.connection.requestAirdrop(MintKey.publicKey, 1000000000);
-  // await program.provider.connection.confirmTransaction(signature);
-
-  // const AIRDROP_AMOUNT = 1 * LAMPORTS_PER_SOL;
-
-  // (async () => {
-  //   console.log(`REQUESTING AIRDROP FOR ===> ${MintKey.publicKey}`)
-  //   // 1 - Request Airdrop
-  //   try {
-  //     const signature = await program.provider.connection.requestAirdrop(
-  //       MintKey.publicKey,
-  //       AIRDROP_AMOUNT
-  //     );
-  //     // 2 - Fetch the latest blockhash
-  //     const { blockhash, lastValidBlockHeight } = await program.provider.connection.getLatestBlockhash();
-  //     // 3 - Confirm transaction success
-  //     await program.provider.connection.confirmTransaction({
-  //       blockhash,
-  //       lastValidBlockHeight,
-  //       signature
-  //     },'finalized');
-  //     // 4 - Log results
-  //     console.log(`AIRDROP Tx Complete: https://explorer.solana.com/tx/${signature}?cluster=devnet`)
-      
-  //   } catch (error) {
-  //     console.log(`AIRDROP FAILED ${error}}`);
-  //   }
-  // })();
-
-
 
   const TokenAddress = anchor.utils.token.associatedAddress({
     mint: MintKey.publicKey,
     owner: wallet.publicKey
   });
+  console.log("-----------------------");
   console.log(`Token Address (ATA) address ===> ${TokenAddress}`);
 
 
@@ -107,12 +69,11 @@ describe( "MINT-NFT DESCRIBE",  () => {
     ],
     TOKEN_METADATA_PROGRAM_ID
   )[0];
+  console.log("-----------------------");
   console.log(`metadata initialized and its address ===> ${metadataAddress}`);
 
 
-
   //FIND PDA FOR MASTER EDITION
-  
   const masterEditionAddress = (anchor.web3.PublicKey.findProgramAddressSync(
     [
       Buffer.from("metadata"),
@@ -122,6 +83,7 @@ describe( "MINT-NFT DESCRIBE",  () => {
     ],
     TOKEN_METADATA_PROGRAM_ID,
   ))[0];
+  console.log("-----------------------");
   console.log(
     `Master edition metadata initialized and its address ===> ${masterEditionAddress}`);
 
@@ -129,7 +91,7 @@ describe( "MINT-NFT DESCRIBE",  () => {
 
     console.log(
     ` ==============================
-    THE BEGINING OF MINT INSTRUCTION`);
+    THE BEGINING OF MINT IT`);
 
     const modifyComputeUnits = ComputeBudgetProgram.setComputeUnitLimit({ 
       units: 1000000 
@@ -138,44 +100,22 @@ describe( "MINT-NFT DESCRIBE",  () => {
     const addPriorityFee = ComputeBudgetProgram.setComputeUnitPrice({ 
       microLamports: 1 
     });
+
+    const { blockhash, lastValidBlockHeight } = await program.provider.connection.getLatestBlockhash("finalized");
+    console.log("-----------------------");
+    console.log("RECENT BLOCKHASH =====>" , blockhash );
+    console.log("-----------------------");
+    console.log( "lastValidBlockHeight =====>", lastValidBlockHeight);
     
-    /////////// IT'S TIME TO INTERACT WITH PROGRAM'S INSTRUCTIONS  /////////// 
+
+    console.log("-----------------------");
+    console.log( "IT'S TIME TO INTERACT WITH MINT INSTRUCTION");
 
     try {
-      const tx = new Transaction();
-      tx.add(
-        program.methods.mintNft(
-          nft_title,
-          nft_symbol,
-          nft_uri,
-        )
-        {
-          accounts: {
-            metadata: metadataAddress,
-            masterEdition: masterEditionAddress,
-            mint: MintKey.publicKey,
-            tokenAccount: TokenAddress,
-            mintAuthority: wallet.publicKey,
-            tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
-            // collectionMint: new PublicKey(collection_key),
-            associatedTokenProgram: new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"),
-            rent: anchor.web3.SYSVAR_RENT_PUBKEY,
-            systemProgram: SystemProgram.programId,
-            tokenProgram: TOKEN_PROGRAM_ID,
-          }
-        }
-      )
-    } catch (error) {
-      
-    }
-
-
-    try {
-      const mint_tx = await program.methods.mintNft(
+      let mintix = await program.methods.mintNft(
         nft_title,
         nft_symbol,
-        nft_uri,
-        // new PublicKey(collection_key),
+        nft_uri
       )
       .accounts({
         metadata: metadataAddress,
@@ -189,34 +129,67 @@ describe( "MINT-NFT DESCRIBE",  () => {
         rent: anchor.web3.SYSVAR_RENT_PUBKEY,
         systemProgram: SystemProgram.programId,
         tokenProgram: TOKEN_PROGRAM_ID,
-        // payer: wallet.publicKey,
-        // updateAuthority: wallet.publicKey,
-        // collectionMetadata: metadataAddress,
-        // collectionMasterEdition: masterEditionAddress,
-        // collectionAuthority: wallet.publicKey,
       })
       .signers([MintKey, wallet.payer])
-      .rpc();
-      console.log(`MINT TX ${mint_tx}`);
-      console.log("BEGINING OF MINT ASSERTION");
-      expect(metadataAddress[nft_title] == "Gold Pass #057");
+      .instruction()
+
+
+      const transaction = new Transaction()
+      .add(modifyComputeUnits)
+      .add(addPriorityFee)
+      .add(mintix)
+
+      console.log("INSTRUCTIONS ADDED TO TX");
+
+      transaction.recentBlockhash =  blockhash;
+      transaction.feePayer = wallet.publicKey;
+
+
+
+      try {
+        //SIGNATURE
+      const signature = await sendAndConfirmTransaction(provider.connection , transaction , [wallet.payer , MintKey] );
+      console.log("-----------------------");
+      console.log("SEND AND CONFIRM TRANSACTION =====>" , signature);
+
+
+      const confirmTx = await program.provider.connection.confirmTransaction({
+        blockhash,
+        lastValidBlockHeight,
+        signature,
+      });
+      console.log("-----------------------");
+      console.log("CONFIRM TRANSACTION =====>" , confirmTx);
+
+
+      const result = await provider.connection.getParsedTransaction(signature , "confirmed");
+      console.log("-----------------------");
+      console.log("TX RESULT =====>", result);
+      } catch (Error) {
+        console.log("ERROR THROWN IN TRY SIGNATURES");
+        console.error(Error);
+      }
+      
     } catch (Error) {
-      console.log(`MINT ERROR ======> ${Error}`);
+      console.log('ERROR THROWN IN TRY BIG PICTURE');
       console.error(Error);
-    };
+    }  
+
+    const getMintKey = await program.provider.connection.getAccountInfo(MintKey.publicKey);
+    console.log("getMintKey" , getMintKey);
     
-
-    // const account =
-
     // const useraccount = await program.account.userInfo.fetch(MintKey.publicKey);
-    // console.log("BEGINING OF MINT ASSERTION");
+
+    console.log("BEGINING OF MINT ASSERTION");
     // assert.equal(nft_title, 'Gold Pass #057');
     // assert.equal(nft_symbol, 'HL_Gold');
-    // expect(metadataAddress[nft_title] == "Gold Pass #057");
-    // assert.equal()
-    // assert.equal(metadataAddress, )
+    expect(metadataAddress[nft_title] == "Gold Pass #057");
   });
 });
+
+
+
+
 // ////////////////// STAKE ///////////////////
 
 //   console.log("THE BEGINING OF STAKE STAGE ACCOUNT'S ");
@@ -452,3 +425,121 @@ describe( "MINT-NFT DESCRIBE",  () => {
 //   assert.equal(nft_symbol, 'HL_Gold');
 // });
 
+
+
+
+    // const tx = new Transaction()
+    // .add(addPriorityFee)
+    // .add(modifyComputeUnits)
+    // .add(
+    //   program.methods.mintNft(
+    //     .accounts({
+    //     metadata: metadataAddress,
+    //     masterEdition: masterEditionAddress,
+    //     mint: MintKey.publicKey,
+    //     tokenAccount: TokenAddress,
+    //     mintAuthority: wallet.publicKey,
+    //     tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
+    //     // collectionMint: new PublicKey(collection_key),
+    //     associatedTokenProgram: new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"),
+    //     rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+    //     systemProgram: SystemProgram.programId,
+    //     tokenProgram: TOKEN_PROGRAM_ID,
+    //     })
+    //   )
+    //   .signatures([MintKey , wallet.payer])
+    // )
+
+
+
+
+
+
+
+
+
+
+
+     // try {
+    //   const mint_tx = await program.methods
+    //   .mintNft(
+    //     nft_title,
+    //     nft_symbol,
+    //     nft_uri,
+    //     // new PublicKey(collection_key),
+    //   )
+    //   .accounts({
+    //     metadata: metadataAddress,
+    //     masterEdition: masterEditionAddress,
+    //     mint: MintKey.publicKey,
+    //     tokenAccount: TokenAddress,
+    //     mintAuthority: wallet.publicKey,
+    //     tokenMetadataProgram: TOKEN_METADATA_PROGRAM_ID,
+    //     // collectionMint: new PublicKey(collection_key),
+    //     associatedTokenProgram: new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"),
+    //     rent: anchor.web3.SYSVAR_RENT_PUBKEY,
+    //     systemProgram: SystemProgram.programId,
+    //     tokenProgram: TOKEN_PROGRAM_ID,
+    //   })
+    //   .signers([MintKey, wallet.payer])
+    //   .transaction()
+    //   await sendAndConfirmTransaction(mint_tx , provider.connection , wallet.payer)
+
+
+
+    //   console.log(`MINT TX ${mint_tx}`);
+    //   console.log("BEGINING OF MINT ASSERTION");
+    //   expect(metadataAddress[nft_title] == "Gold Pass #057");
+    // } catch (Error) {
+    //   console.log(`MINT ERROR ======> ${Error}`);
+    //   console.error(Error);
+    // };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    // const signature = await program.provider.connection.requestAirdrop(MintKey.publicKey, 1000000000);
+  // await program.provider.connection.confirmTransaction(signature);
+
+  // const AIRDROP_AMOUNT = 1 * LAMPORTS_PER_SOL;
+
+  // (async () => {
+  //   console.log(`REQUESTING AIRDROP FOR ===> ${MintKey.publicKey}`)
+  //   // 1 - Request Airdrop
+  //   try {
+  //     const signature = await program.provider.connection.requestAirdrop(
+  //       MintKey.publicKey,
+  //       AIRDROP_AMOUNT
+  //     );
+  //     // 2 - Fetch the latest blockhash
+  //     const { blockhash, lastValidBlockHeight } = await program.provider.connection.getLatestBlockhash();
+  //     // 3 - Confirm transaction success
+  //     await program.provider.connection.confirmTransaction({
+  //       blockhash,
+  //       lastValidBlockHeight,
+  //       signature
+  //     },'finalized');
+  //     // 4 - Log results
+  //     console.log(`AIRDROP Tx Complete: https://explorer.solana.com/tx/${signature}?cluster=devnet`)
+      
+  //   } catch (error) {
+  //     console.log(`AIRDROP FAILED ${error}}`);
+  //   }
+  // })();
