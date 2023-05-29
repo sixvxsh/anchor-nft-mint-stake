@@ -4,8 +4,9 @@ import { MintStake2 } from "../target/types/mint_stake2";
 import {ComputeBudgetProgram, Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, SYSVAR_RENT_PUBKEY, SystemProgram, Transaction, TransactionInstruction, sendAndConfirmRawTransaction, sendAndConfirmTransaction} from "@solana/web3.js"
 import NodeWallet from "@coral-xyz/anchor/dist/cjs/nodewallet";
 import { assert, expect } from "chai";
-import { Mint, TOKEN_PROGRAM_ID, getAssociatedTokenAddress } from "@solana/spl-token";
+import { ASSOCIATED_TOKEN_PROGRAM_ID, Mint, TOKEN_PROGRAM_ID, getAssociatedTokenAddress } from "@solana/spl-token";
 import { bs58 } from "@coral-xyz/anchor/dist/cjs/utils/bytes";
+import { ASSOCIATED_PROGRAM_ID } from "@coral-xyz/anchor/dist/cjs/utils/token";
 
 
 
@@ -87,26 +88,36 @@ describe( "MINT-NFT DESCRIBE",  () => {
   console.log(
     `Master edition metadata initialized and its address ===> ${masterEditionAddress}`);
 
+
+  const modifyComputeUnits = ComputeBudgetProgram.setComputeUnitLimit({ 
+    units: 1000000 
+  });
+
+  const addPriorityFee = ComputeBudgetProgram.setComputeUnitPrice({ 
+    microLamports: 1 
+  });
+
+
+  const BLOCKHASH = async () => {
+    const { blockhash, lastValidBlockHeight } = await program.provider.connection.getLatestBlockhash("finalized");
+
+    return {
+      blockhash: blockhash,
+      lastValidBlockHeight: lastValidBlockHeight
+    }
+    // console.log("-----------------------");
+    // console.log("RECENT BLOCKHASH =====>" , blockhash );
+    // console.log("-----------------------");
+    // console.log( "lastValidBlockHeight =====>", lastValidBlockHeight);
+  };
+  
+
   it("IT MINT!", async () => {
 
     console.log(
     ` ==============================
     THE BEGINING OF MINT IT`);
 
-    const modifyComputeUnits = ComputeBudgetProgram.setComputeUnitLimit({ 
-      units: 1000000 
-    });
-  
-    const addPriorityFee = ComputeBudgetProgram.setComputeUnitPrice({ 
-      microLamports: 1 
-    });
-
-    const { blockhash, lastValidBlockHeight } = await program.provider.connection.getLatestBlockhash("finalized");
-    console.log("-----------------------");
-    console.log("RECENT BLOCKHASH =====>" , blockhash );
-    console.log("-----------------------");
-    console.log( "lastValidBlockHeight =====>", lastValidBlockHeight);
-    
 
     console.log("-----------------------");
     console.log( "IT'S TIME TO INTERACT WITH MINT INSTRUCTION");
@@ -139,8 +150,15 @@ describe( "MINT-NFT DESCRIBE",  () => {
       .add(modifyComputeUnits)
       .add(addPriorityFee)
       .add(mintix)
+      console.log("INSTRUCTIONS ADDED TO MINT TX");
 
-      console.log("INSTRUCTIONS ADDED TO TX");
+
+      const blockhashData = await BLOCKHASH();
+      const { blockhash, lastValidBlockHeight } = blockhashData;
+      console.log("-----------------------");
+      console.log("RECENT BLOCKHASH =====>" , blockhash );
+      console.log("-----------------------");
+      console.log( "lastValidBlockHeight =====>", lastValidBlockHeight);
 
       transaction.recentBlockhash =  blockhash;
       transaction.feePayer = wallet.publicKey;
@@ -148,24 +166,24 @@ describe( "MINT-NFT DESCRIBE",  () => {
 
 
       try {
-        //SIGNATURE
+      //SIGNATURE
       const signature = await sendAndConfirmTransaction(provider.connection , transaction , [wallet.payer , MintKey] );
       console.log("-----------------------");
-      console.log("SEND AND CONFIRM TRANSACTION =====>" , signature);
+      console.log("SEND AND CONFIRM MINT TRANSACTION SIGNATURE =====>" , signature);
 
 
-      const confirmTx = await program.provider.connection.confirmTransaction({
+      const confirmMintTx = await program.provider.connection.confirmTransaction({
         blockhash,
         lastValidBlockHeight,
         signature,
       });
       console.log("-----------------------");
-      console.log("CONFIRM TRANSACTION =====>" , confirmTx);
+      console.log("CONFIRM TRANSACTION =====>" , confirmMintTx);
 
 
       const result = await provider.connection.getParsedTransaction(signature , "confirmed");
       console.log("-----------------------");
-      console.log("TX RESULT =====>", result);
+      console.log("MINT TX RESULT =====>", result);
       } catch (Error) {
         console.log("ERROR THROWN IN TRY SIGNATURES");
         console.error(Error);
@@ -186,107 +204,219 @@ describe( "MINT-NFT DESCRIBE",  () => {
     // assert.equal(nft_symbol, 'HL_Gold');
     expect(metadataAddress[nft_title] == "Gold Pass #057");
   });
+
+
+
+
+
+  ////////////////// STAKE ///////////////////
+
+  console.log("-----------------------");
+  console.log("THE BEGINING OF STAKE STAGE ACCOUNT'S ");
+  console.log("-----------------------");
+
+  const getProgramPdaInfo = async (
+    connection: anchor.web3.Connection,
+    mint: anchor.web3.PublicKey,
+    staker: anchor.web3.PublicKey,
+    userStakeInfo: anchor.web3.PublicKey
+  ) => {
+    const userNftAccount = await getAssociatedTokenAddress(mint , staker);
+    const pdaNftAccount = await getAssociatedTokenAddress(mint, userStakeInfo, true);
+
+    return { userNftAccount, pdaNftAccount };
+  }
+
+  const getUserInfo = (
+    program: anchor.Program<MintStake2>,
+    user: anchor.web3.PublicKey
+  ) => {
+    const [userInfo , _userInfoBump] = anchor.web3.PublicKey.findProgramAddressSync(
+      [
+        Buffer.from(anchor.utils.bytes.utf8.encode("user")),
+        wallet.publicKey.toBuffer(),
+      ],
+      program.programId
+    );
+    return userInfo;
+  };
+
+  const getUserStakeInfo = (
+    program: anchor.Program<MintStake2>,
+    user: anchor.web3.PublicKey,
+    mint: anchor.web3.PublicKey
+  ) => {
+    const [userStakeInfo, _userStakeInfoBump] = anchor.web3.PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("stake_info"),
+        wallet.publicKey.toBuffer(),
+        MintKey.publicKey.toBuffer(),
+      ],
+      program.programId,
+    );
+    return userStakeInfo;
+  }
+
+
+  it("IT STAKE!", async () => {
+
+    console.log("THE BEGINING OF IT STAKE");
+
+
+    console.log("CALLING getUserStakeInfo & getUserInfo FOR STAKE ...");
+    const userStakeInfo = getUserStakeInfo(program , wallet.publicKey , MintKey.publicKey);
+    const userInfo = getUserInfo(program , wallet.publicKey);
+
+
+    console.log("CALLING getProgramPdaInfo FOR STAKE...");
+    const { userNftAccount, pdaNftAccount } = await getProgramPdaInfo(
+    program.provider.connection,
+    MintKey.publicKey,
+    wallet.publicKey,
+    userStakeInfo
+    );
+    
+    
+    console.log("SENDING TRANSACTION TO STAKE INSTRUCTION...");
+    try {
+      const StakeiX = await program.methods.stake()
+      .accounts({
+        systemProgram: SystemProgram.programId,
+        stakingInfo: userStakeInfo,
+        mint: MintKey.publicKey,
+        mintAuthority: wallet.publicKey,
+        userInfo: userInfo,
+        userNftAccount: userNftAccount,
+        pdaNftAccount: pdaNftAccount,
+        metadata: metadataAddress,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        rent: SYSVAR_RENT_PUBKEY,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .signers([wallet.payer])
+      .instruction()
+
+      const stakeTx = new Transaction()
+      .add(modifyComputeUnits)
+      .add(addPriorityFee)
+      .add(StakeiX)
+      console.log("INSTRUCTIONS ADDED TO STAKE TX");
+
+      
+      const blockhashData = await BLOCKHASH();
+      const { blockhash, lastValidBlockHeight } = blockhashData;
+      console.log("-----------------------");
+      console.log("RECENT BLOCKHASH =====>" , blockhash );
+      console.log("-----------------------");
+      console.log( "lastValidBlockHeight =====>", lastValidBlockHeight);
+
+      stakeTx.recentBlockhash =  blockhash;
+      stakeTx.feePayer = wallet.publicKey;
+
+
+      try {
+        const sendStakeTx = await sendAndConfirmTransaction(provider.connection , stakeTx , [wallet.payer , MintKey] );
+        console.log("-----------------------");
+        console.log("SEND AND CONFIRM STAKE TRANSACTION SIGNATURE =====>" , sendStakeTx);
+
+        const result = await provider.connection.getParsedTransaction(sendStakeTx , "confirmed");
+        console.log("-----------------------");
+        console.log("STAKE TX RESULT =====>", result);
+
+      } catch (Error) {
+        console.log("ERROR IN STAKE TRY TX");
+        console.error(Error);        
+      }
+     
+    } catch (error) {
+      console.log(`STAKE ERROR IN BIG PICTURE MINT ${error}`);
+    }
+    const userinfoafter = await program.account.userInfo.fetch(userInfo);
+    assert.equal(userinfoafter.activeStake, 1 );
+  });
+
+
+
+  it(" IT UNSTAKE =====>" , async () => {
+
+    console.log("THE BEGINING OF IT UNSTAKE");
+
+    console.log("CALLING getUserStakeInfo & getUserInfo FOR UNSTAKE ...");
+    const userStakeInfo = getUserStakeInfo(program , wallet.publicKey , MintKey.publicKey);
+    const userInfo = getUserInfo(program , wallet.publicKey);
+
+ 
+    console.log("CALLING getProgramPdaInfo FOR UNSTAKE ...");
+    const { userNftAccount, pdaNftAccount } = await getProgramPdaInfo(
+    program.provider.connection,
+    MintKey.publicKey,
+    wallet.publicKey,
+    userStakeInfo
+    );
+
+    console.log("SENDING TRANSACTION TO UNSTAKE INSTRUCTION...");
+    try {
+      let UnstakeIx = await program.methods
+      .unstake()
+      .accounts({
+        mint: MintKey.publicKey, 
+        mintAuthority: wallet.publicKey, 
+        pdaNftAccount: pdaNftAccount,
+        stakingInfo: userStakeInfo ,
+        systemProgram: SystemProgram.programId,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        userInfo: userInfo ,
+        userNftAccount: userNftAccount,
+      })
+      .signers([wallet.payer])
+      .instruction()
+
+      const UnstakeTx = new Transaction()
+      .add(modifyComputeUnits)
+      .add(addPriorityFee)
+      .add(UnstakeIx)
+      console.log("INSTRUCTIONS ADDED TO UNSTAKE TX");
+
+      const blockhashData = await BLOCKHASH();
+      const { blockhash, lastValidBlockHeight } = blockhashData;
+      console.log("-----------------------");
+      console.log("RECENT BLOCKHASH =====>" , blockhash );
+      console.log("-----------------------");
+      console.log( "lastValidBlockHeight =====>", lastValidBlockHeight);
+
+      UnstakeTx.recentBlockhash =  blockhash;
+      UnstakeTx.feePayer = wallet.publicKey;
+
+      try {
+
+        const sendUnstakeTx = await sendAndConfirmTransaction(provider.connection , UnstakeTx , [wallet.payer , MintKey] );
+        console.log("-----------------------");
+        console.log("SEND AND CONFIRM UNSTAKE TRANSACTION SIGNATURE =====>" , sendUnstakeTx);
+
+        const result = await provider.connection.getParsedTransaction(sendUnstakeTx , "confirmed");
+        console.log("-----------------------");
+        console.log("UNSTAKE TX RESULT =====>", result);
+        
+      } catch (Error) {
+        console.log("ERROR IN TX SIGNATURE UNSTAKE");
+        console.error(Error);
+      }
+      
+    } catch (Error) {
+      console.log("ERROR IN BIG PICTURE UNSTAKE TX");
+      console.error(Error);
+    }
+
+    const userinfoafter = await program.account.userInfo.fetch(userInfo);
+    assert.equal(userinfoafter.activeStake, 0 );
+  });
 });
 
 
 
 
-// ////////////////// STAKE ///////////////////
-
-//   console.log("THE BEGINING OF STAKE STAGE ACCOUNT'S ");
 
 
-//   const getProgramPdaInfo = async (
-//     connection: anchor.web3.Connection,
-//     mint: anchor.web3.PublicKey,
-//     staker: anchor.web3.PublicKey,
-//     userStakeInfo: anchor.web3.PublicKey
-//   ) => {
-//     const userNftAccount = await getAssociatedTokenAddress(mint , staker);
-//     const pdaNftAccount = await getAssociatedTokenAddress(mint, userStakeInfo, true);
-
-//     return { userNftAccount, pdaNftAccount };
-//   }
-
-//   const getUserInfo = (
-//     program: anchor.Program<MintStake2>,
-//     user: anchor.web3.PublicKey
-//   ) => {
-//     const [userInfo , _userInfoBump] = anchor.web3.PublicKey.findProgramAddressSync(
-//       [
-//         Buffer.from(anchor.utils.bytes.utf8.encode("user")),
-//         wallet.publicKey.toBuffer(),
-//       ],
-//       program.programId
-//     );
-//     return userInfo;
-//   };
-
-//   const getUserStakeInfo = (
-//     program: anchor.Program<MintStake2>,
-//     user: anchor.web3.PublicKey,
-//     mint: anchor.web3.PublicKey
-//   ) => {
-//     const [userStakeInfo, _userStakeInfoBump] = anchor.web3.PublicKey.findProgramAddressSync(
-//       [
-//         Buffer.from("stake_info"),
-//         wallet.publicKey.toBuffer(),
-//         MintKey.publicKey.toBuffer(),
-//       ],
-//       program.programId,
-//     );
-//     return userStakeInfo;
-//   }
-
-
-//   it("IT STAKE!", async () => {
-
-//     console.log("THE BEGINING OF STAKE");
-
-
-//     const userStakeInfo = getUserStakeInfo(program , wallet.publicKey , MintKey.publicKey);
-//     const userInfo = getUserInfo(program , wallet.publicKey);
-
-
-
-//     const { userNftAccount, pdaNftAccount } = await getProgramPdaInfo(
-//     program.provider.connection,
-//     MintKey.publicKey,
-//     wallet.publicKey,
-//     userStakeInfo
-//     );
-    
-    
-
-//     try {
-//       const tx = await program.methods.stake()
-//       .accounts({
-//         systemProgram: SystemProgram.programId,
-//         stakingInfo: userStakeInfo,
-//         mint: MintKey.publicKey,
-//         mintAuthority: wallet.publicKey,
-//         userInfo: userInfo,
-//         userNftAccount: userNftAccount,
-//         pdaNftAccount: pdaNftAccount,
-//         metadata: metadataAddress,
-//         associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM,
-//         rent: SYSVAR_RENT_PUBKEY,
-//         tokenProgram: ASSOCIATED_TOKEN_PROGRAM
-//       })
-//       .signers([wallet.payer])
-//       .rpc()
-
-//       console.log("STAKE TX" , tx);
-
-//     } catch (error) {
-//       console.log(`STAKE ERROR ${error}`);
-//     }
-
-//     const userinfoafter = await program.account.userInfo.fetch(userInfo);
-//     assert.equal(userinfoafter.activeStake, 1 );
-//   });
-
-// });
 
 
 
@@ -429,7 +559,7 @@ describe( "MINT-NFT DESCRIBE",  () => {
 
 
 
-    // const tx = new Transaction()
+    // const StakeTx = new Transaction()
     // .add(addPriorityFee)
     // .add(modifyComputeUnits)
     // .add(
@@ -462,7 +592,7 @@ describe( "MINT-NFT DESCRIBE",  () => {
 
 
      // try {
-    //   const mint_tx = await program.methods
+    //   const mint_StakeTx = await program.methods
     //   .mintNft(
     //     nft_title,
     //     nft_symbol,
@@ -484,11 +614,11 @@ describe( "MINT-NFT DESCRIBE",  () => {
     //   })
     //   .signers([MintKey, wallet.payer])
     //   .transaction()
-    //   await sendAndConfirmTransaction(mint_tx , provider.connection , wallet.payer)
+    //   await sendAndConfirmTransaction(mint_StakeTx , provider.connection , wallet.payer)
 
 
 
-    //   console.log(`MINT TX ${mint_tx}`);
+    //   console.log(`MINT StakeTx ${mint_StakeTx}`);
     //   console.log("BEGINING OF MINT ASSERTION");
     //   expect(metadataAddress[nft_title] == "Gold Pass #057");
     // } catch (Error) {
@@ -538,7 +668,7 @@ describe( "MINT-NFT DESCRIBE",  () => {
   //       signature
   //     },'finalized');
   //     // 4 - Log results
-  //     console.log(`AIRDROP Tx Complete: https://explorer.solana.com/tx/${signature}?cluster=devnet`)
+  //     console.log(`AIRDROP StakeTx Complete: https://explorer.solana.com/StakeTx/${signature}?cluster=devnet`)
       
   //   } catch (error) {
   //     console.log(`AIRDROP FAILED ${error}}`);
