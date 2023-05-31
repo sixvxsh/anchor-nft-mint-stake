@@ -278,11 +278,8 @@ pub mod mint_stake2 {
 
         Ok(())
 
-    }
-    
-    
-    
-}
+    } 
+};
 
 #[derive(Accounts)]
 pub struct MintNft<'info> {
